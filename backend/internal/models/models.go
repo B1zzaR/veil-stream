@@ -42,7 +42,9 @@ type Stream struct {
 	OverlayLogoSize    int        `db:"overlay_logo_size" json:"overlay_logo_size"`
 	OverlayLogoOpacity float64    `db:"overlay_logo_opacity" json:"overlay_logo_opacity"`
 	OverlayText        *string    `db:"overlay_text" json:"overlay_text"`
-	OverlayTextPos  string     `db:"overlay_text_pos" json:"overlay_text_pos"`
+	OverlayTextPos     string     `db:"overlay_text_pos" json:"overlay_text_pos"`
+	OverlayTextSize    int        `db:"overlay_text_size" json:"overlay_text_size"`
+	AudioNormalize     bool       `db:"audio_normalize" json:"audio_normalize"`
 	LoopMode        bool       `db:"loop_mode" json:"loop_mode"`
 	ShuffleMode     bool       `db:"shuffle_mode" json:"shuffle_mode"`
 	CurrentVideoID  *string    `db:"current_video_id" json:"current_video_id"`

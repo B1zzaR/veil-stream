@@ -32,6 +32,8 @@ export interface Stream {
   overlay_logo_opacity: number;
   overlay_text: string | null;
   overlay_text_pos: string;
+  overlay_text_size: number;
+  audio_normalize: boolean;
   loop_mode: boolean;
   shuffle_mode: boolean;
   current_video_id: string | null;

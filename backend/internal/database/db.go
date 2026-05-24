@@ -71,10 +71,12 @@ CREATE TABLE IF NOT EXISTS streams (
     overlay_enabled BOOLEAN DEFAULT FALSE,
     overlay_logo_path VARCHAR(500),
     overlay_logo_pos VARCHAR(20) DEFAULT 'top-right',
-    overlay_logo_size INTEGER NOT NULL DEFAULT 100,
+    overlay_logo_size INTEGER NOT NULL DEFAULT 15,
     overlay_logo_opacity FLOAT NOT NULL DEFAULT 1.0,
     overlay_text VARCHAR(255),
     overlay_text_pos VARCHAR(20) DEFAULT 'bottom-left',
+    overlay_text_size INTEGER NOT NULL DEFAULT 28,
+    audio_normalize BOOLEAN NOT NULL DEFAULT false,
     loop_mode BOOLEAN DEFAULT TRUE,
     shuffle_mode BOOLEAN DEFAULT FALSE,
     current_video_id UUID REFERENCES videos(id) ON DELETE SET NULL,
@@ -111,8 +113,13 @@ CREATE INDEX IF NOT EXISTS idx_stream_events_recent ON stream_events(stream_id, 
 
 	// Add new columns to existing databases (idempotent — IF NOT EXISTS).
 	migrations := []string{
-		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS overlay_logo_size INTEGER NOT NULL DEFAULT 100`,
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS overlay_logo_size INTEGER NOT NULL DEFAULT 15`,
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS overlay_logo_opacity FLOAT NOT NULL DEFAULT 1.0`,
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS overlay_text_size INTEGER NOT NULL DEFAULT 28`,
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS audio_normalize BOOLEAN NOT NULL DEFAULT false`,
+		// overlay_logo_size used to mean "% of logo's own size" (broken — size 100 = no change).
+		// Now it means "% of video frame width". Reset any old default/large values.
+		`UPDATE streams SET overlay_logo_size = 15 WHERE overlay_logo_size >= 50 OR overlay_logo_size < 5`,
 	}
 	for _, q := range migrations {
 		if _, err := db.Exec(q); err != nil {

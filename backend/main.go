@@ -118,6 +118,7 @@ func main() {
 	streams.Post("/:id/start", streamH.Start)
 	streams.Post("/:id/stop", streamH.Stop)
 	streams.Post("/:id/restart", streamH.Restart)
+	streams.Post("/:id/skip", streamH.Skip)
 	streams.Post("/:id/scene", streamH.ActivateScene)
 	streams.Post("/:id/logo", streamH.UploadLogo)
 	streams.Get("/:id/events", streamH.Events)

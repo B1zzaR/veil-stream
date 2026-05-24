@@ -122,6 +122,8 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		OverlayLogoPos     *string  `json:"overlay_logo_pos"`
 		OverlayLogoSize    *int     `json:"overlay_logo_size"`
 		OverlayLogoOpacity *float64 `json:"overlay_logo_opacity"`
+		OverlayTextSize    *int     `json:"overlay_text_size"`
+		AudioNormalize     *bool    `json:"audio_normalize"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "неверный запрос"})
@@ -192,6 +194,18 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		}
 		s.OverlayLogoOpacity = op
 	}
+	if req.OverlayTextSize != nil {
+		ts := *req.OverlayTextSize
+		if ts < 12 {
+			ts = 12
+		} else if ts > 120 {
+			ts = 120
+		}
+		s.OverlayTextSize = ts
+	}
+	if req.AudioNormalize != nil {
+		s.AudioNormalize = *req.AudioNormalize
+	}
 
 	_, err := h.db.Exec(`
 		UPDATE streams SET
@@ -200,13 +214,15 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 			loop_mode=$9, shuffle_mode=$10,
 			overlay_enabled=$11, overlay_text=$12, overlay_text_pos=$13, overlay_logo_pos=$14,
 			overlay_logo_size=$15, overlay_logo_opacity=$16,
-			updated_at=$17
-		WHERE id=$18`,
+			overlay_text_size=$17, audio_normalize=$18,
+			updated_at=$19
+		WHERE id=$20`,
 		s.Name, s.RTMPUrl, s.StreamKey,
 		s.Resolution, s.FPS, s.Bitrate, s.AudioBitrate, s.Preset,
 		s.LoopMode, s.ShuffleMode,
 		s.OverlayEnabled, s.OverlayText, s.OverlayTextPos, s.OverlayLogoPos,
 		s.OverlayLogoSize, s.OverlayLogoOpacity,
+		s.OverlayTextSize, s.AudioNormalize,
 		time.Now(), id,
 	)
 	if err != nil {
@@ -352,4 +368,14 @@ func (h *StreamHandler) Status(c *fiber.Ctx) error {
 		"id":      id,
 		"running": h.worker.IsRunning(id),
 	})
+}
+
+// Skip kills the current video so the loop advances to the next one without
+// a full stream stop/start.
+func (h *StreamHandler) Skip(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if !h.worker.SkipVideo(id) {
+		return c.Status(400).JSON(fiber.Map{"error": "трансляция не запущена"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }

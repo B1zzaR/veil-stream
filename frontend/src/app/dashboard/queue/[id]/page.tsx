@@ -24,6 +24,7 @@ export default function QueuePage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [shuffling, setShuffling] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -70,6 +71,18 @@ export default function QueuePage() {
     } catch (err) {
       toast.error((err as Error).message);
       setSettings((s) => ({ ...s, [key]: !val }));
+    }
+  }
+
+  async function handleSkip() {
+    setSkipping(true);
+    try {
+      await api.streams.skip(streamId);
+      toast.success("Видео пропущено");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSkipping(false);
     }
   }
 
@@ -150,11 +163,24 @@ export default function QueuePage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-white">{stream.name}</h1>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className={`badge text-xs ${stream.status === "live" ? "badge-live" : stream.status === "error" ? "badge-error" : "badge-idle"}`}>
               {statusLabel[stream.status] ?? stream.status}
             </span>
             <span className="text-muted text-xs">{queue.length} видео в очереди</span>
+            {stream.status === "live" && (
+              <button
+                className="btn-ghost btn-sm text-xs py-0.5 px-2"
+                onClick={handleSkip}
+                disabled={skipping}
+                title="Пропустить текущее видео и перейти к следующему"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.689c0-.864.933-1.406 1.683-.977l7.108 4.061a1.125 1.125 0 0 1 0 1.954l-7.108 4.061A1.125 1.125 0 0 1 3 16.811V8.69ZM12.75 8.689c0-.864.933-1.406 1.683-.977l7.108 4.061a1.125 1.125 0 0 1 0 1.954l-7.108 4.061a1.125 1.125 0 0 1-1.683-.977V8.69Z" />
+                </svg>
+                {skipping ? "..." : "Пропустить"}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -107,14 +107,15 @@ export default function SettingsPage() {
     );
   }
 
-  const logoSize    = form.overlay_logo_size    ?? 100;
+  const logoSize    = form.overlay_logo_size    ?? 15;
   const logoOpacity = form.overlay_logo_opacity ?? 1;
   const logoPos     = form.overlay_logo_pos     ?? "top-right";
   const textPos     = form.overlay_text_pos     ?? "bottom-left";
+  const textSize    = form.overlay_text_size    ?? 28;
   const overlayText = form.overlay_text ?? "";
 
-  // Logo width in the preview: at 100 % the logo takes ~18 % of the frame width.
-  const previewLogoWidthPct = Math.max(3, logoSize * 0.18);
+  // Logo width in the preview directly matches the % of frame width in the actual stream.
+  const previewLogoWidthPct = Math.max(2, Math.min(50, logoSize));
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -199,7 +200,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4 text-sm flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" className="accent-accent w-4 h-4"
                 checked={form.loop_mode ?? true}
@@ -211,6 +212,12 @@ export default function SettingsPage() {
                 checked={form.shuffle_mode ?? false}
                 onChange={(e) => set("shuffle_mode", e.target.checked)} />
               <span className="text-gray-300">Случайный порядок</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer" title="Выравнивает громкость между видео (FFmpeg loudnorm). Требует перекодирования.">
+              <input type="checkbox" className="accent-accent w-4 h-4"
+                checked={form.audio_normalize ?? false}
+                onChange={(e) => set("audio_normalize", e.target.checked)} />
+              <span className="text-gray-300">Нормализация звука</span>
             </label>
           </div>
         </div>
@@ -249,14 +256,14 @@ export default function SettingsPage() {
                 <div>
                   <label className="label flex items-center justify-between">
                     <span>Размер логотипа</span>
-                    <span className="text-accent font-mono">{logoSize}%</span>
+                    <span className="text-accent font-mono">{logoSize}% от ширины</span>
                   </label>
-                  <input type="range" min={10} max={200} step={5}
+                  <input type="range" min={5} max={50} step={1}
                     value={logoSize}
                     onChange={(e) => set("overlay_logo_size", Number(e.target.value))}
                     className="w-full accent-accent h-1.5 rounded-full cursor-pointer" />
                   <div className="flex justify-between text-xs text-muted mt-1">
-                    <span>10%</span><span>100%</span><span>200%</span>
+                    <span>5%</span><span>25%</span><span>50%</span>
                   </div>
                 </div>
                 <div>
@@ -319,18 +326,19 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {/* Text overlay */}
+                {/* Text overlay — font size scaled proportionally to preview container */}
                 {overlayText && (
                   <div
                     className="absolute text-white font-medium select-none pointer-events-none"
                     style={{
                       ...textPositionStyle(textPos),
-                      fontSize: "1.4%",
-                      padding: "0.6% 1%",
+                      // textSize is in px for a ~1280px wide video; scale to preview (≈ container %)
+                      fontSize: `${(textSize / 1280 * 100).toFixed(3)}%`,
+                      padding: "0.4% 0.8%",
                       background: "rgba(0,0,0,0.5)",
                       borderRadius: "3px",
                       whiteSpace: "nowrap",
-                      transition: "top 150ms, right 150ms, bottom 150ms, left 150ms",
+                      transition: "top 150ms, right 150ms, bottom 150ms, left 150ms, font-size 120ms",
                     }}
                   >
                     {overlayText}
@@ -376,11 +384,26 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="label">Текст оверлея</label>
-                <input className="input" placeholder="Аниме 24/7 · No filler"
-                  value={overlayText}
-                  onChange={(e) => set("overlay_text", e.target.value)} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Текст оверлея</label>
+                  <input className="input" placeholder="Аниме 24/7 · No filler"
+                    value={overlayText}
+                    onChange={(e) => set("overlay_text", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label flex items-center justify-between">
+                    <span>Размер текста</span>
+                    <span className="text-accent font-mono">{textSize}px</span>
+                  </label>
+                  <input type="range" min={16} max={72} step={2}
+                    value={textSize}
+                    onChange={(e) => set("overlay_text_size", Number(e.target.value))}
+                    className="w-full accent-accent h-1.5 rounded-full cursor-pointer" />
+                  <div className="flex justify-between text-xs text-muted mt-1">
+                    <span>16px</span><span>44px</span><span>72px</span>
+                  </div>
+                </div>
               </div>
             </>
           )}

@@ -83,6 +83,8 @@ export const api = {
       request<void>(`/streams/${id}/stop`, { method: "POST" }),
     restart: (id: string) =>
       request<void>(`/streams/${id}/restart`, { method: "POST" }),
+    skip: (id: string) =>
+      request<void>(`/streams/${id}/skip`, { method: "POST" }),
     activateScene: (id: string, scene: string, text?: string) =>
       request<void>(`/streams/${id}/scene`, {
         method: "POST",

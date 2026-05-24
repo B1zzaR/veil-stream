@@ -22,15 +22,16 @@ import (
 
 // Process represents a running FFmpeg session for one stream.
 type Process struct {
-	StreamID  string
-	cmd       *exec.Cmd
-	cancel    context.CancelFunc // cancels the *loop*, not just the current FFmpeg invocation
-	startedAt time.Time
-	restarts  int
-	bitrate   float64
-	fps       float64
-	speed     float64
-	mu        sync.Mutex
+	StreamID      string
+	cmd           *exec.Cmd
+	cancel        context.CancelFunc // cancels the *loop*, not just the current FFmpeg invocation
+	startedAt     time.Time
+	restarts      int
+	bitrate       float64
+	fps           float64
+	speed         float64
+	skipRequested bool // set by SkipVideo to distinguish user-skip from FFmpeg crash
+	mu            sync.Mutex
 }
 
 func (p *Process) Stats() (bitrate, fps, speed float64) {
@@ -177,6 +178,25 @@ func (w *Worker) RestartStream(parent context.Context, streamID string) error {
 	return w.StartStream(parent, streamID)
 }
 
+// SkipVideo kills the current FFmpeg process for the stream so the run-loop
+// advances to the next video without a full stop/start cycle.
+func (w *Worker) SkipVideo(streamID string) bool {
+	w.mu.RLock()
+	p, ok := w.processes[streamID]
+	w.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	p.mu.Lock()
+	p.skipRequested = true
+	cmd := p.cmd
+	p.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+	return true
+}
+
 func (w *Worker) runStream(ctx context.Context, proc *Process) {
 	const maxRestarts = 20
 	defer func() {
@@ -237,8 +257,17 @@ func (w *Worker) runStream(ctx context.Context, proc *Process) {
 			return
 		}
 
-		if exitCode == 0 {
-			// Video finished normally → advance queue.
+		// Check whether this exit was a user-requested skip.
+		proc.mu.Lock()
+		skipped := proc.skipRequested
+		proc.skipRequested = false
+		proc.mu.Unlock()
+
+		if exitCode == 0 || skipped {
+			// Video finished normally OR was skipped → advance queue.
+			if skipped {
+				w.logEvent(streamID, models.EventVideoChanged, "видео пропущено", nil)
+			}
 			if err := w.advanceQueue(stream); err != nil {
 				log.Printf("ffmpeg: advance queue: %v", err)
 				_ = w.setStatus(streamID, models.StatusIdle, nil)
@@ -415,17 +444,25 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 			w, h, w, h,
 		)
 
+		// Clamp text size.
+		textSize := s.OverlayTextSize
+		if textSize < 12 {
+			textSize = 12
+		} else if textSize > 120 {
+			textSize = 120
+		}
+
 		if s.OverlayEnabled && logoPath != "" {
 			args = append(args, "-i", logoPath)
 			logoPos := overlayPosition(s.OverlayLogoPos)
 
-			// Clamp size factor (10–500 %) and opacity (0.0–1.0).
-			sizeFactor := float64(s.OverlayLogoSize) / 100.0
-			if sizeFactor < 0.1 {
-				sizeFactor = 0.1
-			} else if sizeFactor > 5.0 {
-				sizeFactor = 5.0
+			// overlay_logo_size = percentage of video frame width (e.g. 15 = 15% of W).
+			logoWidthPx := int(float64(w) * float64(s.OverlayLogoSize) / 100.0)
+			if logoWidthPx < 10 {
+				logoWidthPx = 10
 			}
+
+			// Clamp opacity (0.0–1.0).
 			opacity := s.OverlayLogoOpacity
 			if opacity < 0 {
 				opacity = 0
@@ -433,26 +470,32 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 				opacity = 1
 			}
 
-			// Logo sub-filter: scale to requested size, then apply opacity via
+			// Logo sub-filter: scale to exact pixel width, then apply opacity via
 			// colorchannelmixer (multiplies the alpha channel).
-			logoFilter := fmt.Sprintf("[1:v]scale=iw*%.4f:-2[logo_s];[logo_s]format=rgba,colorchannelmixer=aa=%.4f[logo_f]",
-				sizeFactor, opacity)
+			logoFilter := fmt.Sprintf("[1:v]scale=%d:-2[logo_s];[logo_s]format=rgba,colorchannelmixer=aa=%.4f[logo_f]",
+				logoWidthPx, opacity)
 
 			filterComplex := fmt.Sprintf("[0:v]%s[scaled];%s;[scaled][logo_f]overlay=%s",
 				scaleFilter, logoFilter, logoPos)
 			if overlayText != "" {
 				textPos := textPosition(s.OverlayTextPos)
-				filterComplex += fmt.Sprintf(",drawtext=text='%s':fontcolor=white:fontsize=28:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
-					escapeFFmpegText(overlayText), textPos[0], textPos[1])
+				filterComplex += fmt.Sprintf(",drawtext=text='%s':fontcolor=white:fontsize=%d:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
+					escapeFFmpegText(overlayText), textSize, textPos[0], textPos[1])
 			}
 			args = append(args, "-filter_complex", filterComplex)
 		} else if s.OverlayEnabled && overlayText != "" {
 			textPos := textPosition(s.OverlayTextPos)
-			vf := fmt.Sprintf("%s,drawtext=text='%s':fontcolor=white:fontsize=28:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
-				scaleFilter, escapeFFmpegText(overlayText), textPos[0], textPos[1])
+			vf := fmt.Sprintf("%s,drawtext=text='%s':fontcolor=white:fontsize=%d:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
+				scaleFilter, escapeFFmpegText(overlayText), textSize, textPos[0], textPos[1])
 			args = append(args, "-vf", vf)
 		} else {
 			args = append(args, "-vf", scaleFilter)
+		}
+
+		// Audio filters: optional loudnorm for level normalization across videos.
+		audioFilter := "aresample=44100"
+		if s.AudioNormalize {
+			audioFilter = "loudnorm=I=-16:LRA=11:TP=-1.5,aresample=44100"
 		}
 
 		args = append(args,
@@ -467,7 +510,7 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 			"-pix_fmt", "yuv420p",
 			"-c:a", "aac",
 			"-b:a", fmt.Sprintf("%dk", s.AudioBitrate),
-			"-ar", "44100",
+			"-af", audioFilter,
 		)
 	}
 
