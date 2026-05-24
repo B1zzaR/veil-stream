@@ -34,6 +34,9 @@ export interface Stream {
   overlay_text_pos: string;
   overlay_text_size: number;
   audio_normalize: boolean;
+  stealth_hflip: boolean;
+  stealth_speed: number;
+  stealth_hue: number;
   loop_mode: boolean;
   shuffle_mode: boolean;
   current_video_id: string | null;

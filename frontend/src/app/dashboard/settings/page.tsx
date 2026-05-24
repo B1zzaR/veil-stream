@@ -434,6 +434,80 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* ── Anti-ban (stealth) ──────────────────────────────────────── */}
+        <div className="card space-y-4">
+          <div>
+            <h2 className="font-semibold text-white text-sm">Защита от бана</h2>
+            <p className="text-xs text-muted mt-0.5">
+              FFmpeg-фильтры, которые меняют видео/аудио отпечаток и усложняют
+              автоматическое распознавание Content ID. Применяются при перезапуске стрима.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap text-sm">
+            <label className="flex items-center gap-2 cursor-pointer" title="Горизонтальное зеркало — hflip. Самый эффективный метод.">
+              <div
+                onClick={() => set("stealth_hflip", !form.stealth_hflip)}
+                className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer
+                  ${form.stealth_hflip ? "bg-accent" : "bg-bg-border"}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform
+                  ${form.stealth_hflip ? "translate-x-4" : "translate-x-0.5"}`} />
+              </div>
+              <span className="text-gray-300">Зеркало (hflip)</span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label flex items-center justify-between">
+                <span>Скорость воспроизведения</span>
+                <span className="text-accent font-mono">
+                  {((form.stealth_speed ?? 1.0) * 100).toFixed(0)}%
+                </span>
+              </label>
+              <input
+                type="range" min={100} max={110} step={0.5}
+                value={Math.round((form.stealth_speed ?? 1.0) * 1000) / 10}
+                onChange={(e) => set("stealth_speed", Number(e.target.value) / 100)}
+                className="w-full accent-accent h-1.5 rounded-full cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-muted mt-1">
+                <span>100% (выкл)</span><span>105%</span><span>110%</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="label flex items-center justify-between">
+                <span>Сдвиг оттенка</span>
+                <span className="text-accent font-mono">{form.stealth_hue ?? 0}°</span>
+              </label>
+              <input
+                type="range" min={0} max={15} step={1}
+                value={form.stealth_hue ?? 0}
+                onChange={(e) => set("stealth_hue", Number(e.target.value))}
+                className="w-full accent-accent h-1.5 rounded-full cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-muted mt-1">
+                <span>0° (выкл)</span><span>7°</span><span>15°</span>
+              </div>
+            </div>
+          </div>
+
+          {(form.stealth_hflip || (form.stealth_speed ?? 1) > 1.001 || (form.stealth_hue ?? 0) > 0) && (
+            <div className="flex items-start gap-2 text-xs text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-3 py-2">
+              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <span>
+                Активны антибан-фильтры — требуется перекодирование видео.
+                {(form.stealth_speed ?? 1) > 1.001 && " Скорость изменена — аудио/видео синхронизированы через atempo."}
+                {" "}Перезапустите стрим чтобы применить.
+              </span>
+            </div>
+          )}
+        </div>
+
         <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? "Сохранение..." : saved ? "✓ Сохранено" : "Сохранить настройки"}
         </button>

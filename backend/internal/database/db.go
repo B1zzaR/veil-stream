@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS streams (
     overlay_text_pos VARCHAR(20) DEFAULT 'bottom-left',
     overlay_text_size INTEGER NOT NULL DEFAULT 28,
     audio_normalize BOOLEAN NOT NULL DEFAULT false,
+    stealth_hflip BOOLEAN NOT NULL DEFAULT false,
+    stealth_speed FLOAT NOT NULL DEFAULT 1.0,
+    stealth_hue INTEGER NOT NULL DEFAULT 0,
     loop_mode BOOLEAN DEFAULT TRUE,
     shuffle_mode BOOLEAN DEFAULT FALSE,
     current_video_id UUID REFERENCES videos(id) ON DELETE SET NULL,
@@ -120,6 +123,10 @@ CREATE INDEX IF NOT EXISTS idx_stream_events_recent ON stream_events(stream_id, 
 		// overlay_logo_size used to mean "% of logo's own size" (broken — size 100 = no change).
 		// Now it means "% of video frame width". Reset any old default/large values.
 		`UPDATE streams SET overlay_logo_size = 15 WHERE overlay_logo_size >= 50 OR overlay_logo_size < 5`,
+		// Stealth (anti-ban) filters.
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_hflip BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_speed FLOAT NOT NULL DEFAULT 1.0`,
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_hue INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, q := range migrations {
 		if _, err := db.Exec(q); err != nil {

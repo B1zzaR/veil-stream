@@ -124,6 +124,9 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		OverlayLogoOpacity *float64 `json:"overlay_logo_opacity"`
 		OverlayTextSize    *int     `json:"overlay_text_size"`
 		AudioNormalize     *bool    `json:"audio_normalize"`
+		StealthHFlip       *bool    `json:"stealth_hflip"`
+		StealthSpeed       *float64 `json:"stealth_speed"`
+		StealthHue         *int     `json:"stealth_hue"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "неверный запрос"})
@@ -206,6 +209,27 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 	if req.AudioNormalize != nil {
 		s.AudioNormalize = *req.AudioNormalize
 	}
+	if req.StealthHFlip != nil {
+		s.StealthHFlip = *req.StealthHFlip
+	}
+	if req.StealthSpeed != nil {
+		sp := *req.StealthSpeed
+		if sp < 1.0 {
+			sp = 1.0
+		} else if sp > 1.10 {
+			sp = 1.10
+		}
+		s.StealthSpeed = sp
+	}
+	if req.StealthHue != nil {
+		h := *req.StealthHue
+		if h < -30 {
+			h = -30
+		} else if h > 30 {
+			h = 30
+		}
+		s.StealthHue = h
+	}
 
 	_, err := h.db.Exec(`
 		UPDATE streams SET
@@ -215,14 +239,16 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 			overlay_enabled=$11, overlay_text=$12, overlay_text_pos=$13, overlay_logo_pos=$14,
 			overlay_logo_size=$15, overlay_logo_opacity=$16,
 			overlay_text_size=$17, audio_normalize=$18,
-			updated_at=$19
-		WHERE id=$20`,
+			stealth_hflip=$19, stealth_speed=$20, stealth_hue=$21,
+			updated_at=$22
+		WHERE id=$23`,
 		s.Name, s.RTMPUrl, s.StreamKey,
 		s.Resolution, s.FPS, s.Bitrate, s.AudioBitrate, s.Preset,
 		s.LoopMode, s.ShuffleMode,
 		s.OverlayEnabled, s.OverlayText, s.OverlayTextPos, s.OverlayLogoPos,
 		s.OverlayLogoSize, s.OverlayLogoOpacity,
 		s.OverlayTextSize, s.AudioNormalize,
+		s.StealthHFlip, s.StealthSpeed, s.StealthHue,
 		time.Now(), id,
 	)
 	if err != nil {

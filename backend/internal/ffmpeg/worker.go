@@ -432,17 +432,54 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 	logoPath := derefStr(s.OverlayLogoPath)
 	overlayText := derefStr(s.OverlayText)
 
-	if v.StreamCopy && !s.OverlayEnabled {
+	// Stealth options require re-encoding, so they force the transcode path.
+	stealthActive := s.StealthHFlip || s.StealthSpeed > 1.001 || s.StealthHue != 0
+
+	if v.StreamCopy && !s.OverlayEnabled && !stealthActive {
 		args = append(args,
 			"-c:v", "copy",
 			"-c:a", "copy",
 		)
 	} else {
 		w, h := parseResolution(s.Resolution)
+
+		// ── Stealth pre-filters applied to the raw input stream ──────────────
+		// Order: speed → flip → scale → hue (colour shift last to avoid
+		// compounding with the pad filter).
+		var preFilters []string
+		if s.StealthSpeed > 1.001 {
+			speed := s.StealthSpeed
+			if speed > 1.10 {
+				speed = 1.10
+			}
+			preFilters = append(preFilters, fmt.Sprintf("setpts=PTS/%.4f", speed))
+		}
+		if s.StealthHFlip {
+			preFilters = append(preFilters, "hflip")
+		}
+
+		// Base scale+pad filter.
 		scaleFilter := fmt.Sprintf(
 			"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2",
 			w, h, w, h,
 		)
+
+		// Hue shift (0 = no change, 1-15 recommended for subtle bypass).
+		if s.StealthHue != 0 {
+			hue := s.StealthHue
+			if hue < -30 {
+				hue = -30
+			} else if hue > 30 {
+				hue = 30
+			}
+			scaleFilter += fmt.Sprintf(",hue=h=%d", hue)
+		}
+
+		// Combine pre-filters with scale.
+		fullVideoFilter := scaleFilter
+		if len(preFilters) > 0 {
+			fullVideoFilter = strings.Join(preFilters, ",") + "," + scaleFilter
+		}
 
 		// Clamp text size.
 		textSize := s.OverlayTextSize
@@ -470,13 +507,12 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 				opacity = 1
 			}
 
-			// Logo sub-filter: scale to exact pixel width, then apply opacity via
-			// colorchannelmixer (multiplies the alpha channel).
+			// Logo sub-filter: scale to exact pixel width, then apply opacity.
 			logoFilter := fmt.Sprintf("[1:v]scale=%d:-2[logo_s];[logo_s]format=rgba,colorchannelmixer=aa=%.4f[logo_f]",
 				logoWidthPx, opacity)
 
 			filterComplex := fmt.Sprintf("[0:v]%s[scaled];%s;[scaled][logo_f]overlay=%s",
-				scaleFilter, logoFilter, logoPos)
+				fullVideoFilter, logoFilter, logoPos)
 			if overlayText != "" {
 				textPos := textPosition(s.OverlayTextPos)
 				filterComplex += fmt.Sprintf(",drawtext=text='%s':fontcolor=white:fontsize=%d:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
@@ -486,17 +522,27 @@ func buildArgs(s *models.Stream, v *models.Video) []string {
 		} else if s.OverlayEnabled && overlayText != "" {
 			textPos := textPosition(s.OverlayTextPos)
 			vf := fmt.Sprintf("%s,drawtext=text='%s':fontcolor=white:fontsize=%d:x=%s:y=%s:box=1:boxcolor=black@0.5:boxborderw=5",
-				scaleFilter, escapeFFmpegText(overlayText), textSize, textPos[0], textPos[1])
+				fullVideoFilter, escapeFFmpegText(overlayText), textSize, textPos[0], textPos[1])
 			args = append(args, "-vf", vf)
 		} else {
-			args = append(args, "-vf", scaleFilter)
+			args = append(args, "-vf", fullVideoFilter)
 		}
 
-		// Audio filters: optional loudnorm for level normalization across videos.
-		audioFilter := "aresample=44100"
-		if s.AudioNormalize {
-			audioFilter = "loudnorm=I=-16:LRA=11:TP=-1.5,aresample=44100"
+		// ── Audio filters ─────────────────────────────────────────────────────
+		// Order: speed (atempo) → loudnorm → resample.
+		var audioFilters []string
+		if s.StealthSpeed > 1.001 {
+			speed := s.StealthSpeed
+			if speed > 1.10 {
+				speed = 1.10
+			}
+			audioFilters = append(audioFilters, fmt.Sprintf("atempo=%.4f", speed))
 		}
+		if s.AudioNormalize {
+			audioFilters = append(audioFilters, "loudnorm=I=-16:LRA=11:TP=-1.5")
+		}
+		audioFilters = append(audioFilters, "aresample=44100")
+		audioFilter := strings.Join(audioFilters, ",")
 
 		args = append(args,
 			"-c:v", "libx264",
