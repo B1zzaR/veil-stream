@@ -1,0 +1,220 @@
+"use client";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Video, WSMessage } from "@/types";
+import { api, formatBytes } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { UploadZone } from "@/components/library/UploadZone";
+import { VideoCard } from "@/components/library/VideoCard";
+import { VideoPreview } from "@/components/library/VideoPreview";
+import { useToast } from "@/components/ui/Toast";
+
+type SortBy = "newest" | "oldest" | "size" | "name";
+
+export default function LibraryPage() {
+  const toast = useToast();
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("newest");
+  const [preview, setPreview] = useState<Video | null>(null);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  useEffect(() => {
+    api.videos.list()
+      .then((v) => setVideos(Array.isArray(v) ? v : []))
+      .catch((err) => toastRef.current.error(err.message ?? "Не удалось загрузить медиатеку"))
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleWS = useCallback((msg: WSMessage) => {
+    if (msg.type === "video:uploaded") {
+      setVideos((prev) => {
+        if (prev.find((v) => v.id === msg.payload.id)) return prev;
+        return [msg.payload, ...prev];
+      });
+    } else if (msg.type === "video:updated") {
+      setVideos((prev) => prev.map((v) => v.id === msg.payload.id ? msg.payload : v));
+    } else if (msg.type === "video:deleted") {
+      setVideos((prev) => prev.filter((v) => v.id !== msg.payload.id));
+      setSelected((prev) => {
+        if (!prev.has(msg.payload.id)) return prev;
+        const next = new Set(prev);
+        next.delete(msg.payload.id);
+        return next;
+      });
+    }
+  }, []);
+
+  useWebSocket(handleWS);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = q ? videos.filter((v) => v.orig_name.toLowerCase().includes(q)) : videos.slice();
+    switch (sortBy) {
+      case "oldest":
+        list.sort((a, b) => a.created_at.localeCompare(b.created_at));
+        break;
+      case "size":
+        list.sort((a, b) => b.size - a.size);
+        break;
+      case "name":
+        list.sort((a, b) => a.orig_name.localeCompare(b.orig_name, "ru"));
+        break;
+      default:
+        list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+    return list;
+  }, [videos, search, sortBy]);
+
+  const totalSize = useMemo(
+    () => videos.reduce((acc, v) => acc + v.size, 0),
+    [videos],
+  );
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelected(new Set(filtered.map((v) => v.id)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    clearSelection();
+  }
+
+  async function handleBulkDelete() {
+    if (selected.size === 0) return;
+    if (!confirm(`Удалить ${selected.size} видео без возможности восстановления?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      const res = await api.videos.bulkDelete(Array.from(selected));
+      if (res.deleted.length > 0) {
+        setVideos((prev) => prev.filter((v) => !res.deleted.includes(v.id)));
+        toast.success(`Удалено: ${res.deleted.length}`);
+      }
+      if (res.skipped.length > 0) {
+        toast.error(`Пропущено: ${res.skipped.length} (используются в активных трансляциях)`);
+      }
+      clearSelection();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-white">Медиатека</h1>
+          <p className="text-muted text-sm mt-0.5">
+            {videos.length} видеофайлов · {formatBytes(totalSize)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectMode ? (
+            <>
+              <span className="text-sm text-muted">{selected.size} выбрано</span>
+              <button className="btn-ghost btn-sm" onClick={selectAll}>Все</button>
+              <button className="btn-ghost btn-sm" onClick={clearSelection}>Снять</button>
+              <button
+                className="btn-danger btn-sm"
+                disabled={selected.size === 0 || bulkDeleting}
+                onClick={handleBulkDelete}
+              >
+                {bulkDeleting ? "..." : `Удалить (${selected.size})`}
+              </button>
+              <button className="btn-ghost btn-sm" onClick={exitSelectMode}>Готово</button>
+            </>
+          ) : (
+            videos.length > 0 && (
+              <button className="btn-ghost btn-sm" onClick={() => setSelectMode(true)}>
+                Выбрать
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <UploadZone onUploaded={(newVideos) => {
+          setVideos((prev) => {
+            const ids = new Set(prev.map((v) => v.id));
+            return [...newVideos.filter((v) => !ids.has(v.id)), ...prev];
+          });
+          if (newVideos.length > 0) {
+            toast.success(`Загружено: ${newVideos.length}`);
+          }
+        }} />
+      </div>
+
+      {videos.length > 4 && (
+        <div className="mb-4 flex gap-3 flex-wrap">
+          <input
+            className="input max-w-xs"
+            placeholder="Поиск по названию..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select className="input max-w-[180px]" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+            <option value="newest">Сначала новые</option>
+            <option value="oldest">Сначала старые</option>
+            <option value="size">По размеру</option>
+            <option value="name">По названию</option>
+          </select>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {[1,2,3,4,5,6,7,8].map((i) => (
+            <div key={i} className="aspect-video bg-bg-card rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted">
+          {search ? "Ничего не найдено" : "Загрузите первые видео выше"}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {filtered.map((video) => (
+            <VideoCard
+              key={video.id}
+              video={video}
+              selectable={selectMode}
+              selected={selected.has(video.id)}
+              onSelect={toggleSelect}
+              onPreview={(v) => setPreview(v)}
+              onDelete={(id) => {
+                setVideos((prev) => prev.filter((v) => v.id !== id));
+                toast.success("Видео удалено");
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {preview && <VideoPreview video={preview} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}

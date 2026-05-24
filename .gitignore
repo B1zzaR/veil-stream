@@ -1,0 +1,36 @@
+# Environment — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Media uploads (potentially huge, user data)
+/media/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.pnp
+frontend/.pnp.js
+frontend/.eslintcache
+
+# Go build artifacts
+backend/tmp/
+backend/*.exe
+
+# Go vendor (optional — uncomment if you prefer vendoring)
+# backend/vendor/
+
+# Docker volumes / data
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
