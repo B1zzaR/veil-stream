@@ -53,6 +53,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export { ApiError };
 
 export const api = {
+  settings: {
+    get: () => request<Record<string, string>>("/settings"),
+    update: (data: Record<string, string>) =>
+      request<{ ok: boolean }>("/settings", { method: "PUT", body: JSON.stringify(data) }),
+    testTelegram: () =>
+      request<{ ok: boolean }>("/settings/telegram/test", { method: "POST" }),
+  },
+
   auth: {
     login: (username: string, password: string) =>
       request<{ token: string; username: string }>("/auth/login", {
@@ -143,6 +151,8 @@ export const api = {
       }),
     reprobe: (id: string) =>
       request<void>(`/videos/${id}/reprobe`, { method: "POST" }),
+    download: (url: string) =>
+      request<{ id: string }>("/videos/download", { method: "POST", body: JSON.stringify({ url }) }),
     /**
      * Upload a single file via the fast streaming endpoint. Returns the created Video.
      * The promise resolves only after the backend has the full file on disk.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"veil/internal/models"
+	"veil/internal/telegram"
 	"veil/internal/ws"
 
 	"github.com/jmoiron/sqlx"
@@ -147,6 +148,14 @@ func (w *Worker) StartStream(parent context.Context, streamID string) error {
 
 	w.logEvent(streamID, models.EventStarted, "трансляция запущена", nil)
 	go w.runStream(ctx, proc)
+
+	// Telegram: notify start (best-effort, non-blocking).
+	go func() {
+		var name string
+		_ = w.db.Get(&name, `SELECT name FROM streams WHERE id=$1`, streamID)
+		w.notify(name, "▶️ Трансляция запущена")
+	}()
+
 	return nil
 }
 
@@ -163,6 +172,11 @@ func (w *Worker) StopStream(streamID string) {
 	_ = w.setStatus(streamID, models.StatusIdle, nil)
 	if ok {
 		w.logEvent(streamID, models.EventStopped, "трансляция остановлена", nil)
+		go func() {
+			var name string
+			_ = w.db.Get(&name, `SELECT name FROM streams WHERE id=$1`, streamID)
+			w.notify(name, "⏹ Трансляция остановлена")
+		}()
 	}
 	w.hub.Broadcast("stream:status", map[string]interface{}{
 		"stream_id": streamID,
@@ -245,6 +259,10 @@ func (w *Worker) runStream(ctx context.Context, proc *Process) {
 		proc.mu.Unlock()
 
 		w.logEvent(streamID, models.EventVideoChanged, "→ "+video.OrigName, &video.ID)
+		// Increment play counter — non-fatal if it fails.
+		if _, err := w.db.Exec(`UPDATE videos SET play_count = play_count + 1 WHERE id = $1`, video.ID); err != nil {
+			log.Printf("ffmpeg: play_count update: %v", err)
+		}
 		w.hub.Broadcast("stream:status", map[string]interface{}{
 			"stream_id":     streamID,
 			"status":        models.StatusLive,
@@ -287,6 +305,11 @@ func (w *Worker) runStream(ctx context.Context, proc *Process) {
 			log.Printf("ffmpeg: stream %s exceeded max restarts", streamID)
 			_ = w.setStatus(streamID, models.StatusError, nil)
 			w.logEvent(streamID, models.EventError, fmt.Sprintf("превышено число перезапусков (%d) — стрим остановлен", maxRestarts), nil)
+			go func() {
+				var name string
+				_ = w.db.Get(&name, `SELECT name FROM streams WHERE id=$1`, streamID)
+				w.notify(name, fmt.Sprintf("🔴 Стрим упал после %d перезапусков и остановлен", maxRestarts))
+			}()
 			w.hub.Broadcast("stream:status", map[string]interface{}{
 				"stream_id": streamID,
 				"status":    models.StatusError,
@@ -703,6 +726,16 @@ func (w *Worker) setStatus(streamID, status string, videoID *string) error {
 		status, streamID,
 	)
 	return err
+}
+
+// notify sends a Telegram message if credentials are configured in app_settings.
+func (w *Worker) notify(streamName, message string) {
+	var token, chatID string
+	_ = w.db.Get(&token, `SELECT value FROM app_settings WHERE key='telegram_bot_token'`)
+	_ = w.db.Get(&chatID, `SELECT value FROM app_settings WHERE key='telegram_chat_id'`)
+	if err := telegram.Send(token, chatID, fmt.Sprintf("<b>%s</b>\n%s", streamName, message)); err != nil {
+		log.Printf("telegram notify: %v", err)
+	}
 }
 
 // logEvent inserts a stream_event row and broadcasts it so listeners refresh.

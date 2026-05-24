@@ -2,6 +2,7 @@
 import { useState, useEffect, CSSProperties } from "react";
 import { Stream } from "@/types";
 import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -30,6 +31,7 @@ function textPositionStyle(pos: string): CSSProperties {
 // ---- component --------------------------------------------------------------
 
 export default function SettingsPage() {
+  const toast = useToast();
   const [streams, setStreams]         = useState<Stream[]>([]);
   const [selected, setSelected]       = useState<Stream | null>(null);
   const [form, setForm]               = useState<Partial<Stream>>({});
@@ -40,10 +42,20 @@ export default function SettingsPage() {
   const [sceneText, setSceneText]     = useState("");
   const [sceneLoading, setSceneLoading] = useState(false);
 
+  // App-level settings (Telegram, etc.)
+  const [tgToken, setTgToken]         = useState("");
+  const [tgChatId, setTgChatId]       = useState("");
+  const [tgTesting, setTgTesting]     = useState(false);
+  const [tgSaving, setTgSaving]       = useState(false);
+
   useEffect(() => {
     api.streams.list().then((ss) => {
       setStreams(ss);
       if (ss.length > 0) { setSelected(ss[0]); setForm(ss[0]); }
+    });
+    api.settings.get().then((s) => {
+      setTgToken(s.telegram_bot_token ?? "");
+      setTgChatId(s.telegram_chat_id ?? "");
     });
   }, []);
 
@@ -83,6 +95,30 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveTelegram() {
+    setTgSaving(true);
+    try {
+      await api.settings.update({ telegram_bot_token: tgToken, telegram_chat_id: tgChatId });
+      toast.success("Настройки Telegram сохранены");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTgSaving(false);
+    }
+  }
+
+  async function testTelegram() {
+    setTgTesting(true);
+    try {
+      await api.settings.testTelegram();
+      toast.success("Тестовое сообщение отправлено!");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTgTesting(false);
     }
   }
 
@@ -506,6 +542,50 @@ export default function SettingsPage() {
               </span>
             </div>
           )}
+        </div>
+
+        {/* ── Telegram notifications ──────────────────────────────────── */}
+        <div className="card space-y-4">
+          <div>
+            <h2 className="font-semibold text-white text-sm">Telegram уведомления</h2>
+            <p className="text-xs text-muted mt-0.5">
+              Получайте сообщения когда стрим запускается, падает или останавливается.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Bot Token</label>
+              <input
+                className="input font-mono text-sm"
+                placeholder="123456:ABC-DEF..."
+                value={tgToken}
+                onChange={(e) => setTgToken(e.target.value)}
+              />
+              <p className="text-xs text-muted mt-1">
+                Создать бота: <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-accent hover:underline">@BotFather</a>
+              </p>
+            </div>
+            <div>
+              <label className="label">Chat ID</label>
+              <input
+                className="input font-mono text-sm"
+                placeholder="-1001234567890"
+                value={tgChatId}
+                onChange={(e) => setTgChatId(e.target.value)}
+              />
+              <p className="text-xs text-muted mt-1">
+                Узнать ID: <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-accent hover:underline">@userinfobot</a>
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button type="button" className="btn-primary btn-sm" onClick={saveTelegram} disabled={tgSaving}>
+              {tgSaving ? "Сохранение..." : "Сохранить"}
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={testTelegram} disabled={tgTesting || !tgToken || !tgChatId}>
+              {tgTesting ? "Отправка..." : "Тест"}
+            </button>
+          </div>
         </div>
 
         <button type="submit" className="btn-primary" disabled={saving}>

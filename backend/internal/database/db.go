@@ -96,6 +96,11 @@ CREATE TABLE IF NOT EXISTS queue_items (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS stream_events (
     id BIGSERIAL PRIMARY KEY,
     stream_id UUID NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
@@ -123,6 +128,8 @@ CREATE INDEX IF NOT EXISTS idx_stream_events_recent ON stream_events(stream_id, 
 		// overlay_logo_size used to mean "% of logo's own size" (broken — size 100 = no change).
 		// Now it means "% of video frame width". Reset any old default/large values.
 		`UPDATE streams SET overlay_logo_size = 15 WHERE overlay_logo_size >= 50 OR overlay_logo_size < 5`,
+		// Play count tracking.
+		`ALTER TABLE videos ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0`,
 		// Stealth (anti-ban) filters.
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_hflip BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_speed FLOAT NOT NULL DEFAULT 1.0`,

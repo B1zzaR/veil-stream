@@ -22,6 +22,7 @@ type Video struct {
 	AudioCodec    *string   `db:"audio_codec" json:"audio_codec"`
 	StreamCopy    bool      `db:"stream_copy" json:"stream_copy"`
 	ThumbnailPath *string   `db:"thumbnail_path" json:"thumbnail_path"`
+	PlayCount     int       `db:"play_count" json:"play_count"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 }
 

@@ -8,7 +8,9 @@ import { VideoCard } from "@/components/library/VideoCard";
 import { VideoPreview } from "@/components/library/VideoPreview";
 import { useToast } from "@/components/ui/Toast";
 
-type SortBy = "newest" | "oldest" | "size" | "name";
+type SortBy = "newest" | "oldest" | "size" | "name" | "plays";
+
+interface DownloadJob { name: string; pct: number; status: string; error?: string }
 
 export default function LibraryPage() {
   const toast = useToast();
@@ -21,6 +23,8 @@ export default function LibraryPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [dlUrl, setDlUrl] = useState("");
+  const [downloads, setDownloads] = useState<Map<string, DownloadJob>>(new Map());
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -33,8 +37,29 @@ export default function LibraryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function handleDownload() {
+    const url = dlUrl.trim();
+    if (!url) return;
+    setDlUrl("");
+    try {
+      await api.videos.download(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   const handleWS = useCallback((msg: WSMessage) => {
-    if (msg.type === "video:uploaded") {
+    if (msg.type === "video:download_progress") {
+      const { id, ...job } = msg.payload;
+      setDownloads((prev) => {
+        const next = new Map(prev);
+        next.set(id, job);
+        if (job.status === "done" || job.status === "error") {
+          setTimeout(() => setDownloads((p) => { const n = new Map(p); n.delete(id); return n; }), 4000);
+        }
+        return next;
+      });
+    } else if (msg.type === "video:uploaded") {
       setVideos((prev) => {
         if (prev.find((v) => v.id === msg.payload.id)) return prev;
         return [msg.payload, ...prev];
@@ -66,6 +91,9 @@ export default function LibraryPage() {
         break;
       case "name":
         list.sort((a, b) => a.orig_name.localeCompare(b.orig_name, "ru"));
+        break;
+      case "plays":
+        list.sort((a, b) => b.play_count - a.play_count);
         break;
       default:
         list.sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -156,6 +184,45 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {/* Download by URL */}
+      <div className="mb-4 flex gap-2">
+        <input
+          className="input flex-1"
+          placeholder="Вставьте ссылку на видео (YouTube, и др.) и нажмите Скачать"
+          value={dlUrl}
+          onChange={(e) => setDlUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleDownload()}
+        />
+        <button className="btn-primary shrink-0" onClick={handleDownload} disabled={!dlUrl.trim()}>
+          Скачать
+        </button>
+      </div>
+
+      {/* Active downloads */}
+      {downloads.size > 0 && (
+        <div className="mb-4 space-y-2">
+          {Array.from(downloads.entries()).map(([id, job]) => (
+            <div key={id} className="card py-2 px-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-300 truncate">{job.name}</p>
+                {job.status === "error" ? (
+                  <p className="text-xs text-error">{job.error || "Ошибка"}</p>
+                ) : job.status === "done" ? (
+                  <p className="text-xs text-green-400">Загружено ✓</p>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex-1 h-1 bg-bg-border rounded-full overflow-hidden">
+                      <div className="h-full bg-accent transition-all duration-300" style={{ width: `${job.pct}%` }} />
+                    </div>
+                    <span className="text-xs text-muted font-mono shrink-0">{Math.round(job.pct)}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="mb-5">
         <UploadZone onUploaded={(newVideos) => {
           setVideos((prev) => {
@@ -181,6 +248,7 @@ export default function LibraryPage() {
             <option value="oldest">Сначала старые</option>
             <option value="size">По размеру</option>
             <option value="name">По названию</option>
+            <option value="plays">По популярности</option>
           </select>
         </div>
       )}

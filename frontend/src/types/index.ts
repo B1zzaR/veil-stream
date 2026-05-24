@@ -11,6 +11,7 @@ export interface Video {
   audio_codec: string | null;
   stream_copy: boolean;
   thumbnail_path: string | null;
+  play_count: number;
   created_at: string;
 }
 
@@ -105,4 +106,5 @@ export type WSMessage =
   | { type: "stream:deleted"; payload: { id: string } }
   | { type: "video:uploaded"; payload: Video }
   | { type: "video:updated"; payload: Video }
-  | { type: "video:deleted"; payload: { id: string } };
+  | { type: "video:deleted"; payload: { id: string } }
+  | { type: "video:download_progress"; payload: { id: string; name: string; pct: number; status: "downloading" | "done" | "error"; error?: string } };

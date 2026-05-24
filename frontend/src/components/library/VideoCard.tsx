@@ -114,11 +114,19 @@ export function VideoCard({ video, onDelete, selectable, selected, onSelect, onP
           <span>{formatBytes(video.size)}</span>
           <span>{video.resolution || "—"}</span>
         </div>
-        {video.video_codec && (
-          <div className="flex items-center justify-between text-xs text-muted mt-0.5">
-            <span className="font-mono">{video.video_codec} / {video.audio_codec ?? "—"}</span>
-          </div>
-        )}
+        <div className="flex items-center justify-between text-xs text-muted mt-0.5">
+          {video.video_codec ? (
+            <span className="font-mono">{video.video_codec}/{video.audio_codec ?? "—"}</span>
+          ) : <span />}
+          {video.play_count > 0 && (
+            <span title={`Сыграло ${video.play_count} раз`} className="flex items-center gap-0.5">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+              </svg>
+              {video.play_count}
+            </span>
+          )}
+        </div>
 
         {/* Delete */}
         {!selectable && (

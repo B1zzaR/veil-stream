@@ -57,6 +57,7 @@ func main() {
 	queueH := handlers.NewQueueHandler(db)
 	dashH := handlers.NewDashboardHandler(db, hub)
 	wsH := handlers.NewWSHandler(hub, cfg.JWTSecret)
+	settingsH := handlers.NewAppSettingsHandler(db)
 
 	const gb = 1024 * 1024 * 1024
 	app := fiber.New(fiber.Config{
@@ -140,9 +141,15 @@ func main() {
 	videos.Get("/:id", videoH.Get)
 	videos.Post("/upload", videoH.Upload)         // legacy multipart batch
 	videos.Post("/upload-one", videoH.UploadOne)  // fast single-file streaming path
+	videos.Post("/download", videoH.Download)     // yt-dlp download by URL
 	videos.Delete("/bulk", videoH.BulkDelete)
 	videos.Delete("/:id", videoH.Delete)
 	videos.Post("/:id/reprobe", videoH.Reprobe)
+
+	// App settings (Telegram, etc.)
+	api.Get("/settings", settingsH.Get)
+	api.Put("/settings", settingsH.Update)
+	api.Post("/settings/telegram/test", settingsH.TestTelegram)
 
 	// WebSocket — JWT validated on upgrade (cookie or ?token=)
 	app.Get("/ws", wsH.Upgrade, wsH.Handle())
