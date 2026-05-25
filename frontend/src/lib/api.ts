@@ -1,4 +1,4 @@
-import { Stream, Video, QueueItem, QueueSettings, DashboardStats, StreamEvent } from "@/types";
+import { Stream, Video, QueueItem, QueueSettings, DashboardStats, StreamEvent, Collection } from "@/types";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -140,6 +140,24 @@ export const api = {
       }),
   },
 
+  collections: {
+    list: () => request<Collection[]>("/collections"),
+    create: (name: string) =>
+      request<Collection>("/collections", { method: "POST", body: JSON.stringify({ name }) }),
+    update: (id: string, name: string) =>
+      request<{ ok: boolean; id: string; name: string }>(`/collections/${id}`, {
+        method: "PUT", body: JSON.stringify({ name }),
+      }),
+    delete: (id: string) => request<void>(`/collections/${id}`, { method: "DELETE" }),
+    videos: (id: string) => request<Video[]>(`/collections/${id}/videos`),
+    addVideos: (id: string, videoIds: string[]) =>
+      request<{ added: number }>(`/collections/${id}/videos`, {
+        method: "POST", body: JSON.stringify({ video_ids: videoIds }),
+      }),
+    removeVideo: (id: string, videoId: string) =>
+      request<void>(`/collections/${id}/videos/${videoId}`, { method: "DELETE" }),
+  },
+
   videos: {
     list: () => request<Video[]>("/videos"),
     get: (id: string) => request<Video>(`/videos/${id}`),
@@ -151,6 +169,8 @@ export const api = {
       }),
     reprobe: (id: string) =>
       request<void>(`/videos/${id}/reprobe`, { method: "POST" }),
+    patchTags: (id: string, tags: string[]) =>
+      request<Video>(`/videos/${id}/tags`, { method: "PATCH", body: JSON.stringify({ tags }) }),
     download: (url: string) =>
       request<{ id: string }>("/videos/download", { method: "POST", body: JSON.stringify({ url }) }),
     /**

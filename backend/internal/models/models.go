@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/lib/pq"
+)
 
 type User struct {
 	ID           int       `db:"id" json:"id"`
@@ -21,9 +25,10 @@ type Video struct {
 	VideoCodec    *string   `db:"video_codec" json:"video_codec"`
 	AudioCodec    *string   `db:"audio_codec" json:"audio_codec"`
 	StreamCopy    bool      `db:"stream_copy" json:"stream_copy"`
-	ThumbnailPath *string   `db:"thumbnail_path" json:"thumbnail_path"`
-	PlayCount     int       `db:"play_count" json:"play_count"`
-	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	ThumbnailPath *string        `db:"thumbnail_path" json:"thumbnail_path"`
+	PlayCount     int            `db:"play_count" json:"play_count"`
+	Tags          pq.StringArray `db:"tags" json:"tags"`
+	CreatedAt     time.Time      `db:"created_at" json:"created_at"`
 }
 
 type Stream struct {
@@ -49,6 +54,7 @@ type Stream struct {
 	StealthHFlip       bool       `db:"stealth_hflip" json:"stealth_hflip"`
 	StealthSpeed       float64    `db:"stealth_speed" json:"stealth_speed"`
 	StealthHue         int        `db:"stealth_hue" json:"stealth_hue"`
+	AutoRestartHours   int        `db:"auto_restart_hours" json:"auto_restart_hours"`
 	LoopMode        bool       `db:"loop_mode" json:"loop_mode"`
 	ShuffleMode     bool       `db:"shuffle_mode" json:"shuffle_mode"`
 	CurrentVideoID  *string    `db:"current_video_id" json:"current_video_id"`
@@ -75,6 +81,14 @@ type StreamEvent struct {
 	Message   string    `db:"message" json:"message"`
 	VideoID   *string   `db:"video_id" json:"video_id,omitempty"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+// Collection is a named folder that groups videos.
+type Collection struct {
+	ID         string    `db:"id" json:"id"`
+	Name       string    `db:"name" json:"name"`
+	VideoCount int       `db:"video_count" json:"video_count"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
 }
 
 // Event type constants

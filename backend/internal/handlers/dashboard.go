@@ -28,6 +28,9 @@ func (h *DashboardHandler) Stats(c *fiber.Ctx) error {
 
 	cpu, ram := ffmpegworker.GetSysStats()
 
+	// Disk space for the /media volume.
+	diskTotal, diskFree := getDiskStats("/media")
+
 	return c.JSON(fiber.Map{
 		"total_streams":    totalStreams,
 		"live_streams":     liveStreams,
@@ -36,6 +39,8 @@ func (h *DashboardHandler) Stats(c *fiber.Ctx) error {
 		"cpu":              cpu,
 		"ram":              ram,
 		"ws_clients":       h.hub.Count(),
+		"disk_total":       diskTotal,
+		"disk_free":        diskFree,
 	})
 }
 

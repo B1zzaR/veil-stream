@@ -12,6 +12,7 @@ export interface Video {
   stream_copy: boolean;
   thumbnail_path: string | null;
   play_count: number;
+  tags: string[];
   created_at: string;
 }
 
@@ -38,6 +39,7 @@ export interface Stream {
   stealth_hflip: boolean;
   stealth_speed: number;
   stealth_hue: number;
+  auto_restart_hours: number;
   loop_mode: boolean;
   shuffle_mode: boolean;
   current_video_id: string | null;
@@ -60,6 +62,13 @@ export interface QueueSettings {
   shuffle_mode: boolean;
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  video_count: number;
+  created_at: string;
+}
+
 export interface DashboardStats {
   total_streams: number;
   live_streams: number;
@@ -68,6 +77,8 @@ export interface DashboardStats {
   cpu: number;
   ram: number;
   ws_clients: number;
+  disk_total: number;
+  disk_free: number;
 }
 
 export interface StreamStats {

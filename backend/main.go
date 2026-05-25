@@ -58,6 +58,7 @@ func main() {
 	dashH := handlers.NewDashboardHandler(db, hub)
 	wsH := handlers.NewWSHandler(hub, cfg.JWTSecret)
 	settingsH := handlers.NewAppSettingsHandler(db)
+	collH := handlers.NewCollectionHandler(db)
 
 	const gb = 1024 * 1024 * 1024
 	app := fiber.New(fiber.Config{
@@ -145,11 +146,22 @@ func main() {
 	videos.Delete("/bulk", videoH.BulkDelete)
 	videos.Delete("/:id", videoH.Delete)
 	videos.Post("/:id/reprobe", videoH.Reprobe)
+	videos.Patch("/:id/tags", videoH.PatchTags)
 
 	// App settings (Telegram, etc.)
 	api.Get("/settings", settingsH.Get)
 	api.Put("/settings", settingsH.Update)
 	api.Post("/settings/telegram/test", settingsH.TestTelegram)
+
+	// Collections (named folders)
+	colls := api.Group("/collections")
+	colls.Get("/", collH.List)
+	colls.Post("/", collH.Create)
+	colls.Put("/:id", collH.Update)
+	colls.Delete("/:id", collH.Delete)
+	colls.Get("/:id/videos", collH.Videos)
+	colls.Post("/:id/videos", collH.AddVideos)
+	colls.Delete("/:id/videos/:videoId", collH.RemoveVideo)
 
 	// WebSocket — JWT validated on upgrade (cookie or ?token=)
 	app.Get("/ws", wsH.Upgrade, wsH.Handle())

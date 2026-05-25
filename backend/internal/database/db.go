@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS collection_videos (
+    collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (collection_id, video_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_videos_col ON collection_videos(collection_id);
+
 CREATE TABLE IF NOT EXISTS stream_events (
     id BIGSERIAL PRIMARY KEY,
     stream_id UUID NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
@@ -134,6 +149,10 @@ CREATE INDEX IF NOT EXISTS idx_stream_events_recent ON stream_events(stream_id, 
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_hflip BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_speed FLOAT NOT NULL DEFAULT 1.0`,
 		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS stealth_hue INTEGER NOT NULL DEFAULT 0`,
+		// Video tags (TEXT[] for multi-tag filtering).
+		`ALTER TABLE videos ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'`,
+		// Auto-restart: schedule periodic restart to bypass YouTube 12h limit.
+		`ALTER TABLE streams ADD COLUMN IF NOT EXISTS auto_restart_hours INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, q := range migrations {
 		if _, err := db.Exec(q); err != nil {
