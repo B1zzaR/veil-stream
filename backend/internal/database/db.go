@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS collection_videos (
+    collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (collection_id, video_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_videos_col ON collection_videos(collection_id);
+
 CREATE TABLE IF NOT EXISTS stream_events (
     id BIGSERIAL PRIMARY KEY,
     stream_id UUID NOT NULL REFERENCES streams(id) ON DELETE CASCADE,

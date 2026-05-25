@@ -62,6 +62,13 @@ export interface QueueSettings {
   shuffle_mode: boolean;
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  video_count: number;
+  created_at: string;
+}
+
 export interface DashboardStats {
   total_streams: number;
   live_streams: number;

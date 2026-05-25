@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Video, WSMessage } from "@/types";
+import { Video, Collection, WSMessage } from "@/types";
 import { api, formatBytes } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { UploadZone } from "@/components/library/UploadZone";
 import { VideoCard } from "@/components/library/VideoCard";
 import { VideoPreview } from "@/components/library/VideoPreview";
+import { FolderBar } from "@/components/library/FolderBar";
+import { CollectionAddModal } from "@/components/library/CollectionAddModal";
 import { useToast } from "@/components/ui/Toast";
 
 type SortBy = "newest" | "oldest" | "size" | "name" | "plays";
@@ -27,16 +29,39 @@ export default function LibraryPage() {
   const [downloads, setDownloads] = useState<Map<string, DownloadJob>>(new Map());
   const [selectedTag, setSelectedTag] = useState("");
 
+  // Collections (folders)
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [collectionVideos, setCollectionVideos] = useState<Video[]>([]);
+  const [loadingCollection, setLoadingCollection] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
   useEffect(() => {
-    api.videos.list()
-      .then((v) => setVideos(Array.isArray(v) ? v : []))
+    Promise.all([api.videos.list(), api.collections.list()])
+      .then(([v, c]) => {
+        setVideos(Array.isArray(v) ? v : []);
+        setCollections(Array.isArray(c) ? c : []);
+      })
       .catch((err) => toastRef.current.error(err.message ?? "Не удалось загрузить медиатеку"))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When a collection is selected, fetch its videos.
+  useEffect(() => {
+    if (!selectedCollection) {
+      setCollectionVideos([]);
+      return;
+    }
+    setLoadingCollection(true);
+    api.collections.videos(selectedCollection)
+      .then((v) => setCollectionVideos(Array.isArray(v) ? v : []))
+      .catch(() => {})
+      .finally(() => setLoadingCollection(false));
+  }, [selectedCollection]);
 
   async function handleDownload() {
     const url = dlUrl.trim();
@@ -67,8 +92,10 @@ export default function LibraryPage() {
       });
     } else if (msg.type === "video:updated") {
       setVideos((prev) => prev.map((v) => v.id === msg.payload.id ? msg.payload : v));
+      setCollectionVideos((prev) => prev.map((v) => v.id === msg.payload.id ? msg.payload : v));
     } else if (msg.type === "video:deleted") {
       setVideos((prev) => prev.filter((v) => v.id !== msg.payload.id));
+      setCollectionVideos((prev) => prev.filter((v) => v.id !== msg.payload.id));
       setSelected((prev) => {
         if (!prev.has(msg.payload.id)) return prev;
         const next = new Set(prev);
@@ -80,15 +107,19 @@ export default function LibraryPage() {
 
   useWebSocket(handleWS);
 
+  // The active set: current collection's videos, or all videos.
+  const activeVideos = selectedCollection ? collectionVideos : videos;
+
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
-    videos.forEach((v) => v.tags?.forEach((t) => tagSet.add(t)));
+    activeVideos.forEach((v) => v.tags?.forEach((t) => tagSet.add(t)));
     return Array.from(tagSet).sort();
-  }, [videos]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos, collectionVideos, selectedCollection]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = q ? videos.filter((v) => v.orig_name.toLowerCase().includes(q)) : videos.slice();
+    let list = q ? activeVideos.filter((v) => v.orig_name.toLowerCase().includes(q)) : activeVideos.slice();
     if (selectedTag) list = list.filter((v) => v.tags?.includes(selectedTag));
     switch (sortBy) {
       case "oldest":
@@ -107,7 +138,7 @@ export default function LibraryPage() {
         list.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
     return list;
-  }, [videos, search, sortBy, selectedTag]);
+  }, [activeVideos, search, sortBy, selectedTag]);
 
   const totalSize = useMemo(
     () => videos.reduce((acc, v) => acc + v.size, 0),
@@ -164,7 +195,9 @@ export default function LibraryPage() {
         <div>
           <h1 className="text-xl font-bold text-white">Медиатека</h1>
           <p className="text-muted text-sm mt-0.5">
-            {videos.length} видеофайлов · {formatBytes(totalSize)}
+            {selectedCollection
+              ? `${collectionVideos.length} серий в папке`
+              : `${videos.length} видеофайлов · ${formatBytes(totalSize)}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -231,19 +264,45 @@ export default function LibraryPage() {
         </div>
       )}
 
-      <div className="mb-5">
-        <UploadZone onUploaded={(newVideos) => {
-          setVideos((prev) => {
-            const ids = new Set(prev.map((v) => v.id));
-            return [...newVideos.filter((v) => !ids.has(v.id)), ...prev];
-          });
-          if (newVideos.length > 0) {
-            toast.success(`Загружено: ${newVideos.length}`);
-          }
-        }} />
-      </div>
+      {/* Folder bar */}
+      <FolderBar
+        collections={collections}
+        selected={selectedCollection}
+        onSelect={(id) => { setSelectedCollection(id); setSelectedTag(""); setSearch(""); }}
+        onChange={setCollections}
+      />
 
-      {videos.length > 4 && (
+      {/* Collection action bar: shown only when a folder is open */}
+      {selectedCollection && (
+        <div className="mb-4 flex items-center gap-3">
+          <button className="btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Добавить серии
+          </button>
+          <span className="text-xs text-muted">
+            Видео в папке не удаляются из библиотеки при удалении из папки
+          </span>
+        </div>
+      )}
+
+      {/* Upload zone — shown only in "All videos" view */}
+      {!selectedCollection && (
+        <div className="mb-5">
+          <UploadZone onUploaded={(newVideos) => {
+            setVideos((prev) => {
+              const ids = new Set(prev.map((v) => v.id));
+              return [...newVideos.filter((v) => !ids.has(v.id)), ...prev];
+            });
+            if (newVideos.length > 0) {
+              toast.success(`Загружено: ${newVideos.length}`);
+            }
+          }} />
+        </div>
+      )}
+
+      {(videos.length > 4 || selectedCollection) && (
         <div className="mb-4 flex gap-3 flex-wrap">
           <input
             className="input max-w-xs"
@@ -269,7 +328,7 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {loading ? (
+      {(loading || loadingCollection) ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {[1,2,3,4,5,6,7,8].map((i) => (
             <div key={i} className="aspect-video bg-bg-card rounded-xl animate-pulse" />
@@ -277,7 +336,11 @@ export default function LibraryPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted">
-          {search ? "Ничего не найдено" : "Загрузите первые видео выше"}
+          {search || selectedTag
+            ? "Ничего не найдено"
+            : selectedCollection
+              ? "Папка пуста — нажмите «Добавить серии»"
+              : "Загрузите первые видео выше"}
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -293,12 +356,40 @@ export default function LibraryPage() {
                 setVideos((prev) => prev.filter((v) => v.id !== id));
                 toast.success("Видео удалено");
               }}
+              onRemoveFromCollection={selectedCollection ? async (id) => {
+                await api.collections.removeVideo(selectedCollection, id);
+                setCollectionVideos((prev) => prev.filter((v) => v.id !== id));
+                // Decrement video_count on the active collection chip.
+                setCollections((prev) =>
+                  prev.map((c) => c.id === selectedCollection
+                    ? { ...c, video_count: Math.max(0, c.video_count - 1) }
+                    : c));
+              } : undefined}
             />
           ))}
         </div>
       )}
 
       {preview && <VideoPreview video={preview} onClose={() => setPreview(null)} />}
+
+      {showAddModal && selectedCollection && (
+        <CollectionAddModal
+          collectionId={selectedCollection}
+          existingIds={new Set(collectionVideos.map((v) => v.id))}
+          allVideos={videos}
+          onAdded={(count) => {
+            setShowAddModal(false);
+            // Refresh collection videos and update count chip.
+            api.collections.videos(selectedCollection).then((v) => setCollectionVideos(v));
+            setCollections((prev) =>
+              prev.map((c) => c.id === selectedCollection
+                ? { ...c, video_count: c.video_count + count }
+                : c));
+            toast.success(`Добавлено серий: ${count}`);
+          }}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }

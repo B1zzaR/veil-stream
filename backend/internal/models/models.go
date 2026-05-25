@@ -83,6 +83,14 @@ type StreamEvent struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
+// Collection is a named folder that groups videos.
+type Collection struct {
+	ID         string    `db:"id" json:"id"`
+	Name       string    `db:"name" json:"name"`
+	VideoCount int       `db:"video_count" json:"video_count"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+}
+
 // Event type constants
 const (
 	EventStarted      = "started"

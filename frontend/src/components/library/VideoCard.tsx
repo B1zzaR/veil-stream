@@ -10,9 +10,10 @@ interface Props {
   selected?: boolean;
   onSelect?: (id: string) => void;
   onPreview?: (v: Video) => void;
+  onRemoveFromCollection?: (id: string) => void;
 }
 
-export function VideoCard({ video, onDelete, selectable, selected, onSelect, onPreview }: Props) {
+export function VideoCard({ video, onDelete, selectable, selected, onSelect, onPreview, onRemoveFromCollection }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -142,10 +143,18 @@ export function VideoCard({ video, onDelete, selectable, selected, onSelect, onP
           </div>
         )}
 
-        {/* Delete */}
+        {/* Actions footer */}
         {!selectable && (
-          <div className="mt-2 pt-2 border-t border-bg-border">
-            {!confirmDelete ? (
+          <div className="mt-2 pt-2 border-t border-bg-border flex items-center justify-between">
+            {/* Remove from collection OR delete */}
+            {onRemoveFromCollection ? (
+              <button
+                className="text-xs text-muted hover:text-gray-300 transition-colors"
+                onClick={(e) => { e.stopPropagation(); onRemoveFromCollection(video.id); }}
+              >
+                Убрать из папки
+              </button>
+            ) : !confirmDelete ? (
               <button
                 className="text-xs text-muted hover:text-error transition-colors"
                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
