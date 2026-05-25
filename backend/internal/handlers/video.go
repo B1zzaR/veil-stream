@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 // writeBufSize is the bufio writer size for streaming uploads to disk.
@@ -47,6 +48,40 @@ func (h *VideoHandler) Get(c *fiber.Ctx) error {
 	if err := h.db.Get(&v, `SELECT * FROM videos WHERE id = $1`, id); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "видео не найдено"})
 	}
+	return c.JSON(v)
+}
+
+// PatchTags replaces the tag list for a video (PUT semantics on the tag array).
+func (h *VideoHandler) PatchTags(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var req struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "неверный запрос"})
+	}
+
+	// Sanitise: trim whitespace, deduplicate, drop empties.
+	seen := map[string]bool{}
+	tags := pq.StringArray{}
+	for _, t := range req.Tags {
+		t = strings.TrimSpace(t)
+		if t != "" && !seen[t] {
+			seen[t] = true
+			tags = append(tags, t)
+		}
+	}
+	if tags == nil {
+		tags = pq.StringArray{}
+	}
+
+	var v models.Video
+	if err := h.db.QueryRowx(
+		`UPDATE videos SET tags=$1 WHERE id=$2 RETURNING *`, tags, id,
+	).StructScan(&v); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "видео не найдено"})
+	}
+	h.hub.Broadcast("video:updated", v)
 	return c.JSON(v)
 }
 

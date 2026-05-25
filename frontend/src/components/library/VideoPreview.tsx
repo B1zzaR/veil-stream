@@ -1,7 +1,7 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Video } from "@/types";
-import { formatBytes, formatDuration } from "@/lib/api";
+import { api, formatBytes, formatDuration } from "@/lib/api";
 
 interface Props {
   video: Video;
@@ -9,6 +9,9 @@ interface Props {
 }
 
 export function VideoPreview({ video, onClose }: Props) {
+  const [tags, setTags] = useState<string[]>(video.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
+
   // Close on Escape for keyboard accessibility.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -17,6 +20,26 @@ export function VideoPreview({ video, onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Persist tag changes to the server (best-effort, silent on failure).
+  async function applyTags(next: string[]) {
+    try { await api.videos.patchTags(video.id, next); } catch { /* silent */ }
+  }
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase();
+    if (!t || tags.includes(t)) { setTagInput(""); return; }
+    const next = [...tags, t];
+    setTags(next);
+    setTagInput("");
+    applyTags(next);
+  }
+
+  function removeTag(tag: string) {
+    const next = tags.filter((t) => t !== tag);
+    setTags(next);
+    applyTags(next);
+  }
 
   // The backend stores absolute server paths; convert to the URL nginx exposes.
   // /media/uploads/<filename> → served by nginx
@@ -75,6 +98,40 @@ export function VideoPreview({ video, onClose }: Props) {
             <div className="text-gray-200 font-mono">
               {video.video_codec ?? "?"} / {video.audio_codec ?? "?"}
             </div>
+          </div>
+        </div>
+
+        {/* Tag editor */}
+        <div className="px-5 pb-4 border-t border-bg-border pt-3">
+          <p className="text-xs text-muted uppercase tracking-wider mb-2">Теги</p>
+          <div className="flex flex-wrap gap-1.5 mb-2 min-h-[1.5rem]">
+            {tags.length === 0 && (
+              <span className="text-xs text-muted italic">нет тегов</span>
+            )}
+            {tags.map((tag) => (
+              <span key={tag} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-bg-hover border border-bg-border text-gray-300">
+                {tag}
+                <button
+                  onClick={() => removeTag(tag)}
+                  className="text-muted hover:text-red-400 leading-none ml-0.5 transition-colors"
+                  title="Убрать тег"
+                >×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="input text-sm h-8 flex-1"
+              placeholder="Новый тег (Enter для добавления)..."
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+            />
+            <button
+              className="btn-ghost btn-sm px-3"
+              onClick={addTag}
+              disabled={!tagInput.trim()}
+            >+</button>
           </div>
         </div>
       </div>

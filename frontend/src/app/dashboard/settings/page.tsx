@@ -256,6 +256,26 @@ export default function SettingsPage() {
               <span className="text-gray-300">Нормализация звука</span>
             </label>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label" title="Автоматически перезапускает трансляцию через заданное время. Помогает обойти лимит YouTube ~12 часов.">
+                Автоперезапуск
+              </label>
+              <select className="input" value={form.auto_restart_hours ?? 0}
+                onChange={(e) => set("auto_restart_hours", Number(e.target.value))}>
+                <option value={0}>Выкл</option>
+                <option value={6}>Каждые 6 ч</option>
+                <option value={8}>Каждые 8 ч</option>
+                <option value={10}>Каждые 10 ч</option>
+                <option value={11}>Каждые 11 ч</option>
+                <option value={12}>Каждые 12 ч</option>
+              </select>
+              <p className="text-xs text-muted mt-1">
+                Сбрасывает лимит YouTube ~12 ч — стрим перезапустится автоматически
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* ── Overlay ─────────────────────────────────────────────────── */}

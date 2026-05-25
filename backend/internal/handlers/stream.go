@@ -127,6 +127,7 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		StealthHFlip       *bool    `json:"stealth_hflip"`
 		StealthSpeed       *float64 `json:"stealth_speed"`
 		StealthHue         *int     `json:"stealth_hue"`
+		AutoRestartHours   *int     `json:"auto_restart_hours"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "неверный запрос"})
@@ -230,6 +231,15 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		}
 		s.StealthHue = h
 	}
+	if req.AutoRestartHours != nil {
+		arh := *req.AutoRestartHours
+		if arh < 0 {
+			arh = 0
+		} else if arh > 24 {
+			arh = 24
+		}
+		s.AutoRestartHours = arh
+	}
 
 	_, err := h.db.Exec(`
 		UPDATE streams SET
@@ -240,8 +250,9 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 			overlay_logo_size=$15, overlay_logo_opacity=$16,
 			overlay_text_size=$17, audio_normalize=$18,
 			stealth_hflip=$19, stealth_speed=$20, stealth_hue=$21,
-			updated_at=$22
-		WHERE id=$23`,
+			auto_restart_hours=$22,
+			updated_at=$23
+		WHERE id=$24`,
 		s.Name, s.RTMPUrl, s.StreamKey,
 		s.Resolution, s.FPS, s.Bitrate, s.AudioBitrate, s.Preset,
 		s.LoopMode, s.ShuffleMode,
@@ -249,6 +260,7 @@ func (h *StreamHandler) Update(c *fiber.Ctx) error {
 		s.OverlayLogoSize, s.OverlayLogoOpacity,
 		s.OverlayTextSize, s.AudioNormalize,
 		s.StealthHFlip, s.StealthSpeed, s.StealthHue,
+		s.AutoRestartHours,
 		time.Now(), id,
 	)
 	if err != nil {

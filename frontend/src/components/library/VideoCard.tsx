@@ -128,6 +128,20 @@ export function VideoCard({ video, onDelete, selectable, selected, onSelect, onP
           )}
         </div>
 
+        {/* Tags */}
+        {video.tags && video.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {video.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-bg-hover text-muted border border-bg-border truncate max-w-[80px]">
+                {tag}
+              </span>
+            ))}
+            {video.tags.length > 3 && (
+              <span className="text-[10px] text-muted">+{video.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+
         {/* Delete */}
         {!selectable && (
           <div className="mt-2 pt-2 border-t border-bg-border">

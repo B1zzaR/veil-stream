@@ -151,6 +151,8 @@ export const api = {
       }),
     reprobe: (id: string) =>
       request<void>(`/videos/${id}/reprobe`, { method: "POST" }),
+    patchTags: (id: string, tags: string[]) =>
+      request<Video>(`/videos/${id}/tags`, { method: "PATCH", body: JSON.stringify({ tags }) }),
     download: (url: string) =>
       request<{ id: string }>("/videos/download", { method: "POST", body: JSON.stringify({ url }) }),
     /**

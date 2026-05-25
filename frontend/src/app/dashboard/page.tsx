@@ -119,7 +119,7 @@ export default function DashboardPage() {
 
       {/* System stats bar */}
       {sysStats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
           {[
             { label: "Трансляций", value: sysStats.total_streams },
             { label: "В эфире", value: sysStats.live_streams, highlight: sysStats.live_streams > 0 },
@@ -129,6 +129,13 @@ export default function DashboardPage() {
               label: "CPU / RAM",
               value: `${sysStats.cpu.toFixed(0)}% / ${(sysStats.ram / 1024 / 1024 / 1024).toFixed(1)} ГБ`,
               warn: sysStats.cpu > 80,
+            },
+            {
+              label: "Диск свободно",
+              value: sysStats.disk_total > 0
+                ? `${formatBytes(sysStats.disk_free)} / ${formatBytes(sysStats.disk_total)}`
+                : "—",
+              warn: sysStats.disk_total > 0 && sysStats.disk_free / sysStats.disk_total < 0.15,
             },
           ].map((stat) => (
             <div key={stat.label} className="card py-3">

@@ -145,6 +145,7 @@ func main() {
 	videos.Delete("/bulk", videoH.BulkDelete)
 	videos.Delete("/:id", videoH.Delete)
 	videos.Post("/:id/reprobe", videoH.Reprobe)
+	videos.Patch("/:id/tags", videoH.PatchTags)
 
 	// App settings (Telegram, etc.)
 	api.Get("/settings", settingsH.Get)

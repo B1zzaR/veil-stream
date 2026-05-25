@@ -156,6 +156,31 @@ func (w *Worker) StartStream(parent context.Context, streamID string) error {
 		w.notify(name, "▶️ Трансляция запущена")
 	}()
 
+	// Auto-restart: bypass YouTube's ~12h live stream limit.
+	// We read the setting in a goroutine so StartStream returns immediately.
+	go func() {
+		var hours int
+		if err := w.db.Get(&hours, `SELECT auto_restart_hours FROM streams WHERE id=$1`, streamID); err != nil || hours <= 0 {
+			return
+		}
+		log.Printf("ffmpeg: auto-restart scheduled for stream %s in %dh", streamID, hours)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(hours) * time.Hour):
+			if !w.IsRunning(streamID) {
+				return
+			}
+			log.Printf("ffmpeg: auto-restarting stream %s after %dh", streamID, hours)
+			go func() {
+				var name string
+				_ = w.db.Get(&name, `SELECT name FROM streams WHERE id=$1`, streamID)
+				w.notify(name, fmt.Sprintf("🔄 Автоперезапуск через %d ч — сбрасываем лимит YouTube", hours))
+			}()
+			_ = w.RestartStream(w.rootCtx, streamID)
+		}
+	}()
+
 	return nil
 }
 

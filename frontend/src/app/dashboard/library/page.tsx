@@ -25,6 +25,7 @@ export default function LibraryPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [dlUrl, setDlUrl] = useState("");
   const [downloads, setDownloads] = useState<Map<string, DownloadJob>>(new Map());
+  const [selectedTag, setSelectedTag] = useState("");
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -79,9 +80,16 @@ export default function LibraryPage() {
 
   useWebSocket(handleWS);
 
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    videos.forEach((v) => v.tags?.forEach((t) => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [videos]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = q ? videos.filter((v) => v.orig_name.toLowerCase().includes(q)) : videos.slice();
+    let list = q ? videos.filter((v) => v.orig_name.toLowerCase().includes(q)) : videos.slice();
+    if (selectedTag) list = list.filter((v) => v.tags?.includes(selectedTag));
     switch (sortBy) {
       case "oldest":
         list.sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -99,7 +107,7 @@ export default function LibraryPage() {
         list.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
     return list;
-  }, [videos, search, sortBy]);
+  }, [videos, search, sortBy, selectedTag]);
 
   const totalSize = useMemo(
     () => videos.reduce((acc, v) => acc + v.size, 0),
@@ -250,6 +258,14 @@ export default function LibraryPage() {
             <option value="name">По названию</option>
             <option value="plays">По популярности</option>
           </select>
+          {allTags.length > 0 && (
+            <select className="input max-w-[160px]" value={selectedTag} onChange={(e) => setSelectedTag(e.target.value)}>
+              <option value="">Все теги</option>
+              {allTags.map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
