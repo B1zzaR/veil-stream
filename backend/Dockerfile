@@ -8,7 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOFLAGS="-mod=mod" go build -ldflags="-w -s" -o /se
 
 FROM alpine:3.19
 RUN apk add --no-cache ffmpeg ca-certificates tzdata curl && \
-    curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_musl" \
+    curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" \
          -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp
 WORKDIR /app
